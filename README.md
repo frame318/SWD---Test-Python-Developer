@@ -1,8 +1,3 @@
----
-runme:
-  id: 01HSZ3DQCZPHB2GX5W6S0688K4
-  version: v3
----
 
 # SWD---Test-Python-Developer
 
