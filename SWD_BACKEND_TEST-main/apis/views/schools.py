@@ -897,7 +897,32 @@ class SchoolHierarchyAPIView(APIView):
             }
         ]
 
+        schools = Schools.objects.all()
+
         your_result = []
+
+        for school in schools:
+            school_dict = {"school": school.title}
+            classes = Classes.objects.filter(school=school).order_by('class_order')
+
+            for class_obj in classes:
+                class_dict = {}
+                class_dict[f"class {class_obj.class_order}"] = {}
+                school_dict.update(class_dict)
+                teacher = Personnel.objects.filter(school_class=class_obj, personnel_type=0)
+                for teacher_obj in teacher:
+                    teacher_dict = {f"Teacher: {teacher_obj.first_name} {teacher_obj.last_name}": []}
+                    class_dict[f"class {class_obj.class_order}"].update(teacher_dict)
+                    head_of_room = Personnel.objects.filter(school_class=class_obj, personnel_type=1)
+                    for head_of_room_obj in head_of_room:
+                        head_of_room_dict = {f"Head of the room": f"{head_of_room_obj.first_name} {head_of_room_obj.last_name}"}
+                        class_dict[f"class {class_obj.class_order}"][f"Teacher: {teacher_obj.first_name} {teacher_obj.last_name}"].append(head_of_room_dict)
+                    students = Personnel.objects.filter(school_class=class_obj, personnel_type=2)
+                    for student_obj in students:
+                        student_dict = {f"Student": f"{student_obj.first_name} {student_obj.last_name}"}
+                        class_dict[f"class {class_obj.class_order}"][f"Teacher: {teacher_obj.first_name} {teacher_obj.last_name}"].append(student_dict)
+                
+            your_result.append(school_dict)
 
         return Response(your_result, status=status.HTTP_200_OK)
 
