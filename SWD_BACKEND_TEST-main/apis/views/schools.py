@@ -59,12 +59,72 @@ class StudentSubjectsScoreAPIView(APIView):
 
         # # Create Objects Example
         # DataModel.objects.create(filed_1=value_1, filed_2=value_2, filed_2=value_3)
+        school_class = Classes.objects.get(school__id=1, class_order=1)
+        print(school_class)
+        '''
+        - If Data Payload not complete return clearly message with bad request status.
+        '''
+        if not all([student_first_name, student_last_name, subjects_title, score]):
+            return Response({"message": "Incomplete data"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        '''
+        - Score must be number, equal or greater than 0 and equal or less than 100.
+        '''
+        try:
+            score = float(score)
+            if score < 0 or score > 100:
+                return Response({"message": "Invalid score"}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError:
+            return Response({"message": "Invalid score"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        '''
+        - Credit must be integer, greater than 0 and equal or less than 3.
+        '''
+        try:
+            subject =  Subjects.objects.get(title=subjects_title)
+        except Subjects.DoesNotExist:
+            return Response({"message": "Subject not found"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        for credits_mapping in credits_mapping:
+            if subject.id == credits_mapping["subject_id"]:
+                credit = credits_mapping["credit_id"]
+                break
+        # print(credit)
 
-        return Response(status=status.HTTP_201_CREATED)
-
+        for credits_context in credits_context:
+            if credit == credits_context["id"]:
+                credit = credits_context["credit"]
+                break
+        # print(credit)
+        
+        try:
+            student = Personnel.objects.get(
+                first_name=student_first_name,last_name=student_last_name)
+        except Personnel.DoesNotExist:
+            student = None
+        
+        if student:
+            try:
+                studemt_subject = StudentSubjectsScore.objects.get(
+                    student=student, subjects=subject)
+                studemt_subject.score = score
+                studemt_subject.credit = credit
+                studemt_subject.save()
+                return Response(status=status.HTTP_200_OK)
+            
+            except StudentSubjectsScore.DoesNotExist:
+                studemt_subject = StudentSubjectsScore.objects.create(
+                    student=student, subjects=subject, score=score, credit=credit)               
+                return Response(status=status.HTTP_201_CREATED)
+        else:
+            student = Personnel.objects.create(
+                first_name=student_first_name,last_name=student_last_name,school_class=school_class)
+            studemt_subject = StudentSubjectsScore.objects.create(
+                student=student, subjects=subject, score=score, credit=credit)
+            return Response(status=status.HTTP_201_CREATED)
 
 class StudentSubjectsScoreDetailsAPIView(APIView):
-
+        
     @staticmethod
     def get(request, *args, **kwargs):
         """
@@ -114,7 +174,41 @@ class StudentSubjectsScoreDetailsAPIView(APIView):
             "grade_point_average": "grade point average",
         }
 
-        return Response(example_context_data, status=status.HTTP_200_OK)
+        student = Personnel.objects.get(id=student_id)
+        student_subject_scores = StudentSubjectsScore.objects.filter(student=student)
+        subject_detail = []
+        total_credit = 0
+        total_score = 0
+
+        for student_subject_score in student_subject_scores:
+            subject_detail.append({
+                "subject": student_subject_score.subjects.title,
+                "credit": student_subject_score.credit,
+                "score": student_subject_score.score,
+                "grade": "A" if 80 <= student_subject_score.score <= 100 else
+                         "B+" if 75 <= student_subject_score.score < 80 else
+                         "B" if 70 <= student_subject_score.score < 75 else
+                         "C+" if 65 <= student_subject_score.score < 70 else
+                         "C" if 60 <= student_subject_score.score < 65 else
+                         "D+" if 55 <= student_subject_score.score < 60 else
+                         "D" if 50 <= student_subject_score.score < 55 else
+                         "F"
+            })
+            total_credit += student_subject_score.credit
+            total_score += student_subject_score.score * student_subject_score.credit
+        print(total_credit)
+        print(total_score)
+        context_data = {
+            "student": {
+                "id": student.id,
+                "full_name": f"{student.first_name} {student.last_name}",
+                "school": student.school_class.school.title
+            },
+            "subject_detail": subject_detail,
+            "grade_point_average": total_score / total_credit
+        }
+
+        return Response(context_data, status=status.HTTP_200_OK)
 
 
 class PersonnelDetailsAPIView(APIView):
@@ -202,6 +296,22 @@ class PersonnelDetailsAPIView(APIView):
 
         school_title = kwargs.get("school_title", None)
 
+        try:
+            school = Schools.objects.get(title=school_title)
+            classes = Classes.objects.filter(school=school)
+            personnels = Personnel.objects.filter(school_class__in=classes).order_by('first_name', 'last_name')
+            print(personnels)
+            your_result = []
+            i = 1
+            for personnel in personnels:
+                your_result.append(f"{i}. school:{school_title}, role:{personnel.get_personnel_type_display()} {personnel.school_class}, {personnel.first_name} {personnel.last_name}")
+                i += 1
+
+            return Response(your_result, status=status.HTTP_200_OK)
+
+        except:
+            return Response({"message": "School not found"}, status=status.HTTP_400_BAD_REQUEST)
+        
         your_result = []
 
         return Response(your_result, status=status.HTTP_400_BAD_REQUEST)
